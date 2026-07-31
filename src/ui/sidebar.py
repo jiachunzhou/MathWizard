@@ -6,11 +6,14 @@
 import os
 
 import streamlit as st
-from dotenv import load_dotenv
 
-# 自动加载 .env
-_load_dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
-load_dotenv(_load_dotenv_path)
+# 尝试加载 .env（python-dotenv 未安装时跳过）
+try:
+    from dotenv import load_dotenv
+    _load_dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+    load_dotenv(_load_dotenv_path)
+except ImportError:
+    pass  # python-dotenv 未安装，使用环境变量
 
 _LLM_DEFAULT_API_KEY = os.environ.get("LLM_API_KEY", "")
 _LLM_DEFAULT_API_BASE = os.environ.get("LLM_API_BASE", "https://api.openai.com/v1")

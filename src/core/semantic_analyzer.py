@@ -17,13 +17,15 @@ import os
 import re
 from typing import Optional
 
-from dotenv import load_dotenv
+# 尝试加载 .env（python-dotenv 未安装时跳过）
+try:
+    from dotenv import load_dotenv
+    _load_dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+    load_dotenv(_load_dotenv_path)
+except ImportError:
+    pass
 
 from src.core.algorithm_kb import ALGORITHM_KB, CATEGORIES, match_keywords, KEYWORD_TO_ALGORITHMS
-
-# 自动加载 .env 文件（项目根目录）
-_load_dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
-load_dotenv(_load_dotenv_path)
 
 # 从 .env 读取默认配置
 _DEFAULT_API_KEY = os.environ.get("LLM_API_KEY", "")
