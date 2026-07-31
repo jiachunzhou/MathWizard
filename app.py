@@ -145,6 +145,9 @@ def init_session_state():
         "analysis_submitted": False,
         "analysis_completed": False,
         "analysis_result": None,
+        "algorithm_confirmed": False,
+        "confirmed_algorithm": None,
+        "confirmed_decision": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:

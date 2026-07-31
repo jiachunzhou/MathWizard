@@ -54,6 +54,11 @@ def render_decision_tab():
     # 算法推荐结果
     _render_algorithm_recommendation_live(decision)
 
+    st.markdown("---")
+
+    # 用户确认交互
+    _render_user_confirmation(decision, semantic, data_report)
+
 
 # ============================================================================
 # 空状态 / 等待状态
@@ -398,3 +403,75 @@ def _render_placeholder_flow():
         <span class="placeholder-step">🎯 算法推荐</span>
     </div>
     """, unsafe_allow_html=True)
+
+
+# ============================================================================
+# 用户确认交互
+# ============================================================================
+
+def _render_user_confirmation(decision: dict, semantic: dict, data_report: dict):
+    """渲染用户确认区域：确认推荐 → 生成代码 / 修改问题 → 重新分析"""
+    st.markdown("### ✋ 确认与下一步")
+
+    primary_info = decision.get("primary_algorithm_info", {})
+    primary_name = primary_info.get("name", decision.get("primary_algorithm", "未知"))
+    confidence = decision.get("confidence", 0)
+
+    # 当前决策状态摘要
+    col_info, col_action = st.columns([2, 1])
+
+    with col_info:
+        confidence_text = (
+            "🟢 高置信度" if confidence >= 0.8
+            else "🟡 中等置信度" if confidence >= 0.5
+            else "🔴 低置信度"
+        )
+        st.markdown(f"""
+        <div style="background:#f0f7ff;padding:1rem;border-radius:10px;border:1px solid #2e86c1;">
+            <strong>当前推荐：</strong>{primary_name} &nbsp;|&nbsp;
+            <strong>分类：</strong>{decision.get('problem_category', '—')} &nbsp;|&nbsp;
+            <strong>置信度：</strong>{confidence_text} ({confidence:.0%})
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 如果置信度低，提示用户
+        if confidence < 0.5:
+            st.warning(
+                "⚠️ 当前置信度较低，建议：\n"
+                "- 在「问题输入」标签页补充更详细的问题描述\n"
+                "- 上传更多相关数据\n"
+                "- 手动选择问题类型后再提交"
+            )
+
+    with col_action:
+        st.markdown("")
+
+        col_confirm, col_modify = st.columns(2)
+
+        with col_confirm:
+            if st.button("✅ 确认推荐\n生成代码", use_container_width=True, type="primary"):
+                st.session_state["algorithm_confirmed"] = True
+                st.session_state["confirmed_algorithm"] = primary_name
+                st.session_state["confirmed_decision"] = decision
+                st.success(f"已确认使用 **{primary_name}**，请切换到「📊 分析结果」标签页查看代码")
+                st.balloons()
+
+        with col_modify:
+            if st.button("✏️ 修改问题\n重新分析", use_container_width=True):
+                st.session_state["algorithm_confirmed"] = False
+                st.info(
+                    "请返回「📝 问题输入」标签页，修改问题描述或数据后重新提交分析。\n\n"
+                    "💡 建议：\n"
+                    "- 补充更多数学关键词（如算法名、约束条件）\n"
+                    "- 在侧边栏手动选择问题类型缩小范围"
+                )
+
+    # 显示修改建议（置信度中等时）
+    if 0.5 <= confidence < 0.8:
+        with st.expander("💡 如何提高推荐准确度？", expanded=False):
+            st.markdown("""
+            - **补充数学术语**：在问题描述中使用精确的数学关键词（如"最小二乘""样条插值""共轭梯度"等）
+            - **指定约束条件**：明确数据规模、精度要求、矩阵特性等
+            - **输入 LaTeX 公式**：提供精确的数学表达式
+            - **手动选择类型**：在侧边栏手动选择问题类型缩小算法搜索范围
+            """)

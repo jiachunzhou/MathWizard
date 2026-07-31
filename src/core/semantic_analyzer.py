@@ -44,7 +44,7 @@ def _build_system_prompt() -> str:
 
     return f"""你是一个数值分析专家系统。分析用户描述的数学问题，输出结构化JSON。
 
-## 可识别的问题类型：
+## 可识别的问题类型（suggested_category 必须从以下列表中精确选择一个）：
 {categories_desc}
 
 ## 输出格式（严格JSON，不要markdown包裹）：
@@ -58,7 +58,7 @@ def _build_system_prompt() -> str:
         "parameters": ["参数列表"]
     }},
     "constraints": ["约束条件列表"],
-    "suggested_category": "建议的算法大类",
+    "suggested_category": "必须从上述分类中精确选择，例如：曲线拟合、插值与逼近、数值积分、数值微分、线性方程组、非线性方程、特征值问题、常微分方程",
     "confidence": 0.0-1.0,
     "reasoning": "简短推理过程"
 }}

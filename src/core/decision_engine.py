@@ -97,22 +97,48 @@ def run_decision_tree(
 # ============================================================================
 
 def _decide_category(semantic: dict, path: list) -> str:
-    """确定问题分类"""
+    """确定问题分类（支持 LLM 返回的非标准分类名模糊匹配）"""
     suggested = semantic.get("suggested_category", "")
     problem_type = semantic.get("problem_type", "")
 
-    # 语义分析直接给出的分类
-    for cat in CATEGORIES:
+    # 构建标准分类名列表
+    cat_names = list(CATEGORIES.keys())
+    # 构建别名映射（LLM 可能返回的非标准名称）
+    cat_aliases = {
+        "曲线拟合": ["拟合", "回归", "最小二乘拟合", "多项式回归"],
+        "插值与逼近": ["插值", "样条插值", "逼近", "三次样条"],
+        "数值积分": ["积分", "求积", "数值积分计算"],
+        "数值微分": ["微分", "导数", "数值导数"],
+        "线性方程组": ["线性方程", "直接法", "迭代法", "方程组求解", "矩阵求解"],
+        "非线性方程": ["求根", "非线性方程求根", "方程求解"],
+        "特征值问题": ["特征值", "特征向量", "谱分解"],
+        "常微分方程": ["ODE", "微分方程", "初值问题", "Runge-Kutta"],
+    }
+
+    # 1. 精确匹配
+    for cat in cat_names:
         if cat in suggested or cat in problem_type:
             path.append({
                 "step": "问题分类",
-                "decision": f"语义分析 → {cat}",
+                "decision": f"语义分析 → {cat}（精确匹配）",
                 "source": "LLM 语义分析",
                 "confidence": semantic.get("confidence", 0.7),
             })
             return cat
 
-    # 回退：从关键词算法反推分类
+    # 2. 别名模糊匹配
+    for cat, aliases in cat_aliases.items():
+        for alias in aliases:
+            if alias in suggested or alias in problem_type:
+                path.append({
+                    "step": "问题分类",
+                    "decision": f"语义分析 → {cat}（别名匹配: 「{alias}」）",
+                    "source": "LLM 语义分析 + 别名映射",
+                    "confidence": semantic.get("confidence", 0.7),
+                })
+                return cat
+
+    # 3. 回退：从关键词算法反推分类
     keyword_algs = semantic.get("keyword_matched_algorithms", [])
     if keyword_algs:
         for cat, info in CATEGORIES.items():
