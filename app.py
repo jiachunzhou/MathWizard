@@ -5,7 +5,7 @@ MATLAB 算法智能分析平台 — 主入口
 功能：
 1. 复杂数学公式输入（LaTeX）+ 实时预览
 2. 数据文件上传（CSV/Excel/TXT）
-3. LLM 决策树算法选择（后续阶段）
+3. LLM 决策树算法选择 ✅
 4. Python 代码生成 + MATLAB 调用（后续阶段）
 5. 结果验证（后续阶段）
 """
@@ -16,6 +16,7 @@ from src.ui.formula_input import render_formula_input, render_formula_templates,
 from src.ui.file_upload import render_file_upload
 from src.ui.sidebar import render_sidebar, PROBLEM_TYPES
 from src.ui.decision_display import render_decision_tab
+from src.core.pipeline import run_analysis_pipeline
 
 
 # ============================================================================
@@ -142,6 +143,7 @@ def init_session_state():
         "uploaded_data": None,
         "file_name": None,
         "analysis_submitted": False,
+        "analysis_completed": False,
         "analysis_result": None,
     }
     for key, value in defaults.items():
@@ -290,17 +292,35 @@ def render_submit_area(config: dict, description: str, latex: str, df):
             "data_columns": df.columns.tolist() if df is not None else None,
             "llm_model": config.get('llm_model'),
         }
-        st.success("✅ 分析请求已提交！")
+
+        # ---- 调用分析流水线 ----
+        with st.spinner("🚀 正在执行分析流水线..."):
+            try:
+                results = run_analysis_pipeline(
+                    description=description,
+                    df=df,
+                    latex_formula=latex,
+                    problem_type_override=config.get('problem_type'),
+                    llm_model=config.get('llm_model', 'gpt-4o-mini'),
+                    llm_api_key=config.get('llm_api_key', ''),
+                    llm_api_base=config.get('llm_api_base', ''),
+                )
+                st.success("✅ 分析完成！")
+            except Exception as e:
+                st.error(f"❌ 分析过程出错：{str(e)}")
+                st.info(
+                    "💡 **离线模式提示**：如果未配置 LLM API Key，"
+                    "系统会自动使用关键词规则引擎进行语义分析。"
+                )
 
         # 展示提交摘要
-        with st.expander("📋 提交摘要", expanded=True):
+        with st.expander("📋 提交摘要", expanded=False):
             st.json(st.session_state["submission_data"])
 
         st.info(
-            "💡 **分析流程：**\n\n"
+            "💡 **下一步：**\n\n"
             "1. 🌳 切换到「**算法决策**」标签页 → 查看 LLM 决策树推理过程\n"
-            "2. 📊 切换到「**分析结果**」标签页 → 查看生成的代码与验证结果\n\n"
-            "（当前为界面展示阶段，LLM 推理和代码生成将在后续版本实现）"
+            "2. 📊 切换到「**分析结果**」标签页 → 查看生成的代码与验证结果"
         )
 
 
