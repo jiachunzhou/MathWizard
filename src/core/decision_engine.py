@@ -141,7 +141,7 @@ def _decide_category(semantic: dict, path: list) -> str:
 # ============================================================================
 
 def _collect_candidates(category: str, semantic: dict, path: list) -> list:
-    """收集候选算法并打初始分"""
+    """收集候选算法并打初始分（多维度加权评分）"""
     # 从知识库获取该分类所有算法
     cat_algs = get_category_algorithms(category)
 
@@ -154,22 +154,54 @@ def _collect_candidates(category: str, semantic: dict, path: list) -> list:
         })
         return []
 
-    # 关键词命中的算法加分
-    keyword_algs = set(semantic.get("keyword_matched_algorithms", []))
+    # 关键词命中计数（多次命中累积加分）
+    keyword_algs = semantic.get("keyword_matched_algorithms", [])
+    from collections import Counter
+    keyword_hit_count = Counter(keyword_algs)
+
+    mathematical_intent = semantic.get("mathematical_intent", "")
+    problem_type = semantic.get("problem_type", "")
+
     candidates = []
 
     for alg_id in cat_algs:
         info = get_algorithm_info(alg_id)
         score = 5.0  # 基础分
 
-        # 关键词命中加分
-        if alg_id in keyword_algs:
-            score += 10.0
+        # ---- 1. 关键词命中计数加权 ----
+        hit_count = keyword_hit_count.get(alg_id, 0)
+        if hit_count > 0:
+            score += min(15.0, hit_count * 3.0)
 
-        # 关键词中算法名命中再加分
+        # ---- 2. 算法名称分词匹配 ----
         name = info.get("name", "")
-        if any(kw in semantic.get("mathematical_intent", "") for kw in name.split()):
-            score += 5.0
+        name_parts = name.replace("（", " ").replace("）", " ").replace("(", " ").replace(")", " ").split()
+        for part in name_parts:
+            if len(part) >= 2 and part in mathematical_intent:
+                score += 4.0
+                break  # 只加一次
+
+        # ---- 3. 子类别匹配 ----
+        subcategory = info.get("subcategory", "")
+        if subcategory and subcategory in problem_type:
+            score += 3.0
+
+        # ---- 4. 关键词特异性加分 ----
+        specific_keywords = info.get("keywords", [])
+        for kw in specific_keywords:
+            if len(kw) >= 3 and kw in mathematical_intent:
+                specificity_bonus = min(5.0, len(kw) * 0.5)
+                score += specificity_bonus
+
+        # ---- 5. 算法收敛速度加分 ----
+        convergence = info.get("convergence_rate", "")
+        if "二次" in convergence or "超线性" in convergence:
+            score += 1.0  # 更快的收敛速度有小幅加分
+
+        # ---- 6. 数值稳定性加分 ----
+        stability = info.get("stability", "")
+        if stability == "高":
+            score += 0.5
 
         candidates.append({
             "algorithm_id": alg_id,
@@ -183,9 +215,9 @@ def _collect_candidates(category: str, semantic: dict, path: list) -> list:
 
     path.append({
         "step": "候选收集",
-        "decision": f"从「{category}」分类收集 {len(candidates)} 个候选算法",
-        "source": "知识库查询",
-        "detail": [c["name"] for c in candidates],
+        "decision": f"从「{category}」分类收集 {len(candidates)} 个候选算法（多维度加权评分）",
+        "source": "知识库查询 + 关键词加权",
+        "detail": [f"{c['name']}: {c['score']:.1f}分" for c in candidates],
     })
 
     return candidates
@@ -196,7 +228,7 @@ def _collect_candidates(category: str, semantic: dict, path: list) -> list:
 # ============================================================================
 
 def _apply_data_constraints(candidates: list, data_features: dict, path: list) -> list:
-    """基于数据特征调整候选算法分数"""
+    """基于数据特征调整候选算法分数（7 个维度）"""
     if not data_features.get("has_data"):
         path.append({
             "step": "数据约束",
@@ -212,16 +244,17 @@ def _apply_data_constraints(candidates: list, data_features: dict, path: list) -
         info = get_algorithm_info(alg_id)
         match_rules = info.get("data_features_match", {})
 
-        # 稀疏性检查
+        # ---- 1. 稀疏性检查 ----
         if data_features.get("is_sparse"):
-            if match_rules.get("is_sparse") is True:
-                c["score"] += 8.0  # 稀疏矩阵 + 迭代法 = 好匹配
+            sparse_match = match_rules.get("is_sparse")
+            if sparse_match is True:
+                c["score"] += 8.0
                 adjustments.append(f"{c['name']}: 稀疏矩阵 → 迭代法加分")
-            elif match_rules.get("is_sparse") is False:
-                c["score"] -= 5.0  # 稀疏矩阵 + 直接法 = 不太合适
+            elif sparse_match is False:
+                c["score"] -= 5.0
                 adjustments.append(f"{c['name']}: 稀疏矩阵 → 直接法降分")
 
-        # 规模检查
+        # ---- 2. 数据规模检查 ----
         scale = data_features.get("scale_level", "small")
         allowed_scales = match_rules.get("scale_level", [])
         if allowed_scales:
@@ -232,17 +265,78 @@ def _apply_data_constraints(candidates: list, data_features: dict, path: list) -
                 c["score"] += 3.0
                 adjustments.append(f"{c['name']}: 数据规模 {scale} 匹配 → 加分")
 
+        # ---- 3. 缺失值检查 ----
+        if data_features.get("needs_imputation"):
+            imp_match = match_rules.get("needs_imputation")
+            if imp_match is False:
+                c["score"] -= 6.0
+                adjustments.append(f"{c['name']}: 数据有缺失 → 需先插值处理")
+            elif imp_match is True:
+                c["score"] += 4.0
+                adjustments.append(f"{c['name']}: 可处理缺失数据 → 加分")
+
+        # ---- 4. 量纲/标准化检查 ----
+        if data_features.get("needs_scaling"):
+            scale_match = match_rules.get("needs_scaling")
+            if scale_match is False:
+                c["score"] -= 4.0
+                adjustments.append(f"{c['name']}: 量纲差异大 → 需先标准化")
+            elif scale_match is True:
+                c["score"] += 3.0
+                adjustments.append(f"{c['name']}: 可处理不同量纲 → 加分")
+
+        # ---- 5. 数值列占比检查 ----
+        numeric_ratio = data_features.get("numeric_ratio", 1.0)
+        min_ratio = match_rules.get("numeric_ratio_min", 0.0)
+        if numeric_ratio < min_ratio:
+            c["score"] -= 5.0
+            adjustments.append(
+                f"{c['name']}: 数值列占比不足 ({numeric_ratio:.0%} < {min_ratio:.0%}) → 降分"
+            )
+
+        # ---- 6. 分布特征检查（非正态） ----
+        if data_features.get("has_non_normal"):
+            nn_match = match_rules.get("has_non_normal")
+            if nn_match is False:
+                c["score"] -= 3.0
+                adjustments.append(f"{c['name']}: 数据非正态分布 → 降分")
+
+        # 偏态检查
+        if data_features.get("has_skewed"):
+            skew_match = match_rules.get("has_skewed")
+            if skew_match is False:
+                c["score"] -= 2.0
+                adjustments.append(f"{c['name']}: 数据偏态分布 → 降分")
+
+        # ---- 7. 行数范围检查 ----
+        rows = data_features.get("rows", 0)
+        min_rows = match_rules.get("min_rows", 0)
+        max_rows = match_rules.get("max_rows", float("inf"))
+        if rows < min_rows:
+            c["score"] -= 5.0
+            adjustments.append(f"{c['name']}: 行数不足 ({rows} < {min_rows}) → 降分")
+        if rows > max_rows:
+            penalty = match_rules.get("penalty_weight", 1.0)
+            c["score"] -= 4.0 * penalty
+            adjustments.append(f"{c['name']}: 行数超出推荐范围 ({rows} > {max_rows}) → 降分")
+
+        # ---- 8. 纯数值检查 ----
+        if not data_features.get("is_purely_numeric", True):
+            if match_rules.get("is_purely_numeric") is True:
+                c["score"] -= 4.0
+                adjustments.append(f"{c['name']}: 数据含非数值列 → 降分")
+
     if adjustments:
         path.append({
             "step": "数据约束",
-            "decision": f"基于数据特征调整 {len(adjustments)} 项分数",
+            "decision": f"基于 {len(adjustments)} 项数据特征调整候选算法分数",
             "source": "数据特征分析",
             "detail": adjustments,
         })
     else:
         path.append({
             "step": "数据约束",
-            "decision": "数据特征无明显约束影响",
+            "decision": "数据特征与所有候选算法匹配良好",
             "source": "数据特征分析",
         })
 
@@ -286,22 +380,46 @@ def _rank_and_select(candidates: list, path: list) -> tuple:
 # ============================================================================
 
 def _compute_confidence(candidates: list, semantic: dict, data_features: dict) -> float:
-    """计算综合置信度"""
+    """计算综合置信度（梯度加分）"""
     if not candidates:
         return 0.0
 
     # 基础：语义分析置信度
     base = semantic.get("confidence", 0.5)
 
-    # 有数据时，数据匹配度加分
-    if data_features.get("has_data"):
-        base = min(1.0, base + 0.1)
+    # ---- 数据匹配度动态加分 ----
+    if data_features.get("has_data") and len(candidates) > 0:
+        # 首选分数越高说明越匹配
+        top_score = candidates[0].get("score", 0)
+        if top_score >= 20:
+            base = min(1.0, base + 0.12)
+        elif top_score >= 15:
+            base = min(1.0, base + 0.08)
+        elif top_score >= 10:
+            base = min(1.0, base + 0.05)
+        else:
+            base = min(1.0, base + 0.03)
 
-    # 首选与第二名的分数差距
+    # ---- 首选与第二名的分数差距（梯度加分） ----
     if len(candidates) >= 2:
         gap = candidates[0]["score"] - candidates[1]["score"]
+        if gap > 2:
+            base = min(1.0, base + 0.04)
         if gap > 5:
-            base = min(1.0, base + 0.1)
+            base = min(1.0, base + 0.04)
+        if gap > 10:
+            base = min(1.0, base + 0.04)
+
+    # ---- 关键词命中数量加分 ----
+    keyword_hits = len(semantic.get("keyword_matched_algorithms", []))
+    if keyword_hits >= 3:
+        base = min(1.0, base + 0.04)
+    if keyword_hits >= 5:
+        base = min(1.0, base + 0.04)
+
+    # ---- LLM 分析方法加分 ----
+    if semantic.get("analysis_method") == "llm":
+        base = min(1.0, base + 0.05)
 
     return round(base, 2)
 

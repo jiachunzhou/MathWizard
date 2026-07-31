@@ -15,7 +15,7 @@ import os
 import re
 from typing import Optional
 
-from src.core.algorithm_kb import CATEGORIES, match_keywords, KEYWORD_TO_ALGORITHMS
+from src.core.algorithm_kb import ALGORITHM_KB, CATEGORIES, match_keywords, KEYWORD_TO_ALGORITHMS
 
 
 # ============================================================================
@@ -59,12 +59,26 @@ def _build_system_prompt() -> str:
 - 如果用户提到"求根/f(x)=0/二分/牛顿"→ 非线性方程
 - 如果用户提到"特征值/特征向量/谱"→ 特征值问题
 - 如果用户提到"ODE/微分方程/初值"→ 常微分方程
+
+## LaTeX 公式识别规则：
+- 出现 \\int, \\iint, \\iiint → 数值积分
+- 出现 \\frac{{dy}}{{dx}}, \\frac{{d}}{{dt}}, y', \\dot{{y}} → 常微分方程
+- 出现 Ax=b, \\begin{{bmatrix}}, \\begin{{vmatrix}} → 线性方程组
+- 出现 \\lambda, \\det, \\operatorname{{tr}} → 特征值问题
+- 出现 \\sum (y_i - \\hat{{y}}_i)^2, \\min\\| → 最小二乘/曲线拟合
+- 出现 f(x)=0, \\sqrt{{}}, x_{{n+1}} = x_n - → 非线性方程求根
+- 出现 \\sum_{{i=0}}^{{n}}, \\prod, \\ell_i(x) → 插值与逼近
+- 出现 \\nabla, \\frac{{\\partial}}{{\\partial}} → 数值微分
 """
 
 
-def _build_user_prompt(description: str, has_data: bool, data_summary: str = "") -> str:
+def _build_user_prompt(description: str, has_data: bool, data_summary: str = "", latex_formula: str = "") -> str:
     """构建用户提示词"""
     prompt = f"分析以下数学问题：\n\n{description}"
+
+    if latex_formula:
+        prompt += f"\n\n## 用户提供的 LaTeX 公式\n```latex\n{latex_formula}\n```"
+        prompt += "\n请从公式中提取：使用的数学符号、公式的结构类型（方程组/积分/微分方程等）"
 
     if has_data and data_summary:
         prompt += f"\n\n## 上传数据概况\n{data_summary}"
@@ -77,6 +91,7 @@ def call_llm_for_semantic_analysis(
     description: str,
     has_data: bool = False,
     data_summary: str = "",
+    latex_formula: str = "",
     model: str = "gpt-4o-mini",
     api_key: Optional[str] = None,
     api_base: Optional[str] = None,
@@ -88,6 +103,7 @@ def call_llm_for_semantic_analysis(
         description: 用户问题描述
         has_data: 是否有上传数据
         data_summary: 数据摘要文本
+        latex_formula: 用户输入的 LaTeX 公式
         model: 模型名称
         api_key: API Key
         api_base: API Base URL
@@ -112,7 +128,7 @@ def call_llm_for_semantic_analysis(
             model=model,
             messages=[
                 {"role": "system", "content": _build_system_prompt()},
-                {"role": "user", "content": _build_user_prompt(description, has_data, data_summary)},
+                {"role": "user", "content": _build_user_prompt(description, has_data, data_summary, latex_formula)},
             ],
             temperature=0.3,
             max_tokens=1000,
@@ -178,45 +194,84 @@ def _fallback_keyword_analysis(description: str) -> dict:
     """
     基于关键词匹配的语义分析（不需要 LLM API）
     作为 LLM 不可用时的回退方案
+
+    核心改进：使用 KEYWORD_TO_ALGORITHMS 驱动分类判定，
+    消除硬编码的 if-else 链，与知识库保持同步。
     """
     text = description.lower()
 
-    # 问题类型判定
-    type_scores = {}
-    if any(kw in text for kw in ["插值", "样条", "过点", "通过.*点"]):
-        type_scores["插值与逼近"] = 3
-    if any(kw in text for kw in ["拟合", "最小二乘", "回归", "残差"]):
-        type_scores["曲线拟合"] = 3
-    if any(kw in text for kw in ["积分", "求积", "辛普森", "梯形"]):
-        type_scores["数值积分"] = 3
-    if any(kw in text for kw in ["导数", "微分", "梯度"]):
-        type_scores["数值微分"] = 2
-    if any(kw in text for kw in ["线性方程", "方程组", "Ax", "矩阵求解"]):
-        type_scores["线性方程组"] = 3
-    if any(kw in text for kw in ["求根", "f(x)=0", "二分", "牛顿", "不动点"]):
-        type_scores["非线性方程"] = 3
-    if any(kw in text for kw in ["特征值", "特征向量", "谱"]):
-        type_scores["特征值问题"] = 3
-    if any(kw in text for kw in ["ode", "微分方程", "初值", "龙格库塔"]):
-        type_scores["常微分方程"] = 3
+    # ---- 使用 KEYWORD_TO_ALGORITHMS 驱动分类判定 ----
+    # 遍历所有关键词，通过匹配到的算法反推分类得分
+    category_scores = {}
+    for keyword, alg_ids in KEYWORD_TO_ALGORITHMS.items():
+        if keyword.lower() in text:
+            # 关键词长度作为特异性权重：越长越具体
+            specificity = min(5.0, len(keyword) * 0.5)
+            for alg_id in alg_ids:
+                info = ALGORITHM_KB.get(alg_id, {})
+                cat = info.get("category", "未知")
+                if cat in CATEGORIES:
+                    category_scores[cat] = category_scores.get(cat, 0) + specificity
 
-    # 选得分最高的
-    if type_scores:
-        problem_type = max(type_scores, key=type_scores.get)
+    # 选得分最高的分类
+    if category_scores:
+        problem_type = max(category_scores, key=category_scores.get)
     else:
         problem_type = "数值计算"
 
-    # 关键词匹配算法
+    # ---- 关键词匹配算法（复用知识库函数） ----
     keyword_algs = match_keywords(description)
+
+    # ---- 置信度：基于匹配到的关键词数量和质量 ----
+    if keyword_algs:
+        # 统计不同关键词的命中数量
+        unique_hits = sum(1 for kw in KEYWORD_TO_ALGORITHMS if kw.lower() in text)
+        confidence = min(0.85, 0.3 + unique_hits * 0.08)
+    else:
+        confidence = 0.2
+
+    # ---- 推导约束条件 ----
+    constraints = _derive_constraints_from_keywords(text)
+
+    # ---- 构建分类得分详情 ----
+    category_detail = sorted(category_scores.items(), key=lambda x: x[1], reverse=True)
 
     return {
         "problem_type": problem_type,
         "mathematical_intent": f"对问题进行{problem_type}分析",
         "key_entities": {},
-        "constraints": [],
+        "constraints": constraints,
         "suggested_category": problem_type,
-        "confidence": min(0.7, len(keyword_algs) * 0.1),
-        "reasoning": f"基于关键词规则匹配，命中 {len(keyword_algs)} 个算法候选",
+        "confidence": round(confidence, 2),
+        "reasoning": (
+            f"基于关键词规则匹配：命中 {len(keyword_algs)} 个算法候选，"
+            f"{unique_hits if keyword_algs else 0} 个独立关键词。"
+            f"分类得分：{', '.join(f'{k}({v:.1f})' for k, v in category_detail[:3])}"
+        ),
         "keyword_matched_algorithms": keyword_algs,
         "analysis_method": "keyword_rules",
+        "category_scores": category_scores,
     }
+
+
+def _derive_constraints_from_keywords(text: str) -> list:
+    """从关键词中推导约束条件"""
+    constraints = []
+    constraint_map = {
+        "高精度": "需要高精度结果",
+        "快速": "需要快速收敛",
+        "稳健": "需要保证收敛",
+        "稀疏": "矩阵是稀疏的",
+        "对称": "矩阵具有对称性",
+        "正定": "矩阵对称正定",
+        "大规模": "数据规模较大",
+        "光滑": "函数充分光滑",
+        "自适应": "需要自适应步长/误差控制",
+        "刚性": "方程是刚性的",
+        "噪声": "数据含噪声",
+        "离群": "数据含离群点",
+    }
+    for kw, constraint in constraint_map.items():
+        if kw in text:
+            constraints.append(constraint)
+    return constraints

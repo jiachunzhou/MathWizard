@@ -216,7 +216,7 @@ def _render_data_analysis_live(data_report: dict):
 # ============================================================================
 
 def _render_decision_path(decision: dict):
-    """渲染决策树推理路径"""
+    """渲染决策树推理路径（含 detail 明细）"""
     st.markdown("### 🌲 决策树推理路径")
 
     path = decision.get("decision_path", [])
@@ -230,16 +230,37 @@ def _render_decision_path(decision: dict):
 
     for i, step in enumerate(path):
         color = "#2e86c1" if i < len(path) - 1 else "#27ae60"
-        html_parts.append(f"""
+        confidence = step.get("confidence", None)
+
+        # 主步骤信息
+        step_html = f"""
         <div style="position:relative;margin-bottom:16px;">
             <div style="position:absolute;left:-24px;top:4px;width:12px;height:12px;
                         border-radius:50%;background:{color};border:2px solid #fff;
                         box-shadow:0 0 0 2px {color};"></div>
-            <div style="font-weight:600;color:#333;">{step['step']}</div>
+            <div style="font-weight:600;color:#333;">
+                {step['step']}
+                {f'<span style="font-size:0.75rem;color:{color};margin-left:8px;">置信度: {confidence:.0%}</span>' if confidence is not None else ''}
+            </div>
             <div style="color:#555;margin:2px 0;">{step['decision']}</div>
             <div style="font-size:0.8rem;color:#999;">来源：{step.get('source', '—')}</div>
-        </div>
-        """)
+        """
+
+        # 渲染 detail 明细
+        detail = step.get("detail")
+        if detail:
+            step_html += '<div style="margin-top:6px;padding:6px 10px;background:#f8f9fa;border-radius:6px;font-size:0.8rem;">'
+            if isinstance(detail, list):
+                for item in detail[:10]:  # 最多显示10条
+                    step_html += f'<div style="color:#666;line-height:1.6;">&nbsp;&nbsp;• {item}</div>'
+                if len(detail) > 10:
+                    step_html += f'<div style="color:#999;">&nbsp;&nbsp;... 还有 {len(detail) - 10} 条</div>'
+            else:
+                step_html += f'<div style="color:#666;">{detail}</div>'
+            step_html += '</div>'
+
+        step_html += '</div>'
+        html_parts.append(step_html)
 
     html_parts.append('</div>')
     st.markdown('\n'.join(html_parts), unsafe_allow_html=True)

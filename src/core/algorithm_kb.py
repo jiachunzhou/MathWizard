@@ -37,6 +37,15 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"P(x) = \sum_{i=0}^{n} y_i \prod_{j\neq i} \frac{x-x_j}{x_i-x_j}",
         ],
+        "data_features_match": {
+            "scale_level": ["small"],
+            "is_sparse": False,
+            "needs_imputation": False,
+            "is_purely_numeric": True,
+            "min_rows": 2,
+            "max_rows": 30,
+            "penalty_weight": 1.0,
+        },
     },
     "newton_interpolation": {
         "name": "牛顿插值",
@@ -54,6 +63,14 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"P_n(x) = f[x_0] + f[x_0,x_1](x-x_0) + \cdots + f[x_0,\ldots,x_n]\prod_{i=0}^{n-1}(x-x_i)",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium"],
+            "is_sparse": False,
+            "needs_imputation": False,
+            "is_purely_numeric": True,
+            "min_rows": 2,
+            "max_rows": 50,
+        },
     },
     "spline_interpolation": {
         "name": "三次样条插值",
@@ -72,6 +89,13 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"S_i(x) = a_i + b_i(x-x_i) + c_i(x-x_i)^2 + d_i(x-x_i)^3",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium", "large"],
+            "is_sparse": False,
+            "needs_imputation": False,
+            "is_purely_numeric": True,
+            "min_rows": 4,
+        },
     },
     "least_squares_fit": {
         "name": "最小二乘拟合",
@@ -91,9 +115,12 @@ ALGORITHM_KB = {
             r"\min \sum_{i=1}^{m} (y_i - f(x_i))^2",
             r"\hat{\beta} = (A^T A)^{-1} A^T y",
         ],
-        "data_features_required": {
-            "needs_target_column": True,
+        "data_features_match": {
+            "scale_level": ["small", "medium", "large"],
+            "needs_imputation": False,
+            "is_purely_numeric": True,
             "min_rows": 3,
+            "needs_scaling": True,
         },
     },
 
@@ -116,6 +143,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"\int_a^b f(x)dx \approx h\left[\frac{f(a)+f(b)}{2} + \sum_{i=1}^{n-1} f(x_i)\right]",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium", "large"],
+            "is_purely_numeric": True,
+        },
     },
     "composite_simpson": {
         "name": "复合辛普森公式",
@@ -134,6 +165,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"\int_a^b f(x)dx \approx \frac{h}{3}\left[f(a)+f(b)+4\sum_{odd}+2\sum_{even}\right]",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium", "large"],
+            "is_purely_numeric": True,
+        },
     },
     "gauss_quadrature": {
         "name": "高斯求积公式",
@@ -152,6 +187,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"\int_{-1}^{1} f(x)dx \approx \sum_{i=1}^{n} w_i f(x_i)",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium"],
+            "is_purely_numeric": True,
+        },
     },
     "romberg_integration": {
         "name": "龙贝格积分",
@@ -169,6 +208,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"T_{m}^{(k)} = \frac{4^m T_{m-1}^{(k+1)} - T_{m-1}^{(k)}}{4^m - 1}",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium"],
+            "is_purely_numeric": True,
+        },
     },
     "numerical_differentiation": {
         "name": "数值微分",
@@ -186,6 +229,11 @@ ALGORITHM_KB = {
             r"f'(x) \approx \frac{f(x+h)-f(x-h)}{2h}",
             r"f''(x) \approx \frac{f(x+h)-2f(x)+f(x-h)}{h^2}",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium"],
+            "needs_imputation": False,
+            "is_purely_numeric": True,
+        },
     },
 
     # ========================================================================
@@ -229,6 +277,11 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"A = LU, \quad L\text{下三角}, U\text{上三角}",
         ],
+        "data_features_match": {
+            "is_sparse": False,
+            "scale_level": ["small", "medium"],
+            "is_purely_numeric": True,
+        },
     },
     "cholesky_decomposition": {
         "name": "Cholesky 分解",
@@ -245,6 +298,11 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"A = LL^T, \quad A\text{对称正定}",
         ],
+        "data_features_match": {
+            "is_sparse": False,
+            "scale_level": ["small", "medium"],
+            "is_purely_numeric": True,
+        },
     },
     "jacobi_iteration": {
         "name": "雅可比迭代法",
@@ -283,6 +341,11 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"x^{(k+1)} = (D+L)^{-1}(b - Ux^{(k)})",
         ],
+        "data_features_match": {
+            "is_sparse": True,
+            "scale_level": ["large", "xlarge"],
+            "is_purely_numeric": True,
+        },
     },
     "sor_iteration": {
         "name": "SOR 迭代法",
@@ -299,6 +362,11 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"x^{(k+1)} = (1-\omega)x^{(k)} + \omega (D+L)^{-1}(b - Ux^{(k)})",
         ],
+        "data_features_match": {
+            "is_sparse": True,
+            "scale_level": ["large", "xlarge"],
+            "is_purely_numeric": True,
+        },
     },
     "conjugate_gradient": {
         "name": "共轭梯度法",
@@ -315,6 +383,11 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"x_{k+1} = x_k + \alpha_k p_k, \quad \alpha_k = \frac{r_k^T r_k}{p_k^T A p_k}",
         ],
+        "data_features_match": {
+            "is_sparse": True,
+            "scale_level": ["large", "xlarge"],
+            "is_purely_numeric": True,
+        },
     },
 
     # ========================================================================
@@ -337,6 +410,9 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"c = \frac{a+b}{2}, \quad f(a)f(c)<0 \Rightarrow b=c \text{ else } a=c",
         ],
+        "data_features_match": {
+            "is_purely_numeric": True,
+        },
     },
     "newton_method": {
         "name": "牛顿迭代法",
@@ -356,6 +432,9 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"x_{n+1} = x_n - \frac{f(x_n)}{f'(x_n)}",
         ],
+        "data_features_match": {
+            "is_purely_numeric": True,
+        },
     },
     "secant_method": {
         "name": "割线法",
@@ -373,6 +452,9 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"x_{n+1} = x_n - f(x_n)\frac{x_n - x_{n-1}}{f(x_n) - f(x_{n-1})}",
         ],
+        "data_features_match": {
+            "is_purely_numeric": True,
+        },
     },
     "fixed_point_iteration": {
         "name": "不动点迭代",
@@ -389,6 +471,9 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"x = g(x), \quad x_{n+1} = g(x_n)",
         ],
+        "data_features_match": {
+            "is_purely_numeric": True,
+        },
     },
 
     # ========================================================================
@@ -410,6 +495,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"v_{k+1} = \frac{Av_k}{\|Av_k\|}, \quad \lambda \approx \frac{v_k^T A v_k}{v_k^T v_k}",
         ],
+        "data_features_match": {
+            "scale_level": ["large", "xlarge"],
+            "is_purely_numeric": True,
+        },
     },
     "inverse_power_method": {
         "name": "反幂法",
@@ -425,6 +514,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"(A - \mu I)v_{k+1} = v_k, \quad \lambda \approx \mu + \frac{1}{\tilde{\lambda}}",
         ],
+        "data_features_match": {
+            "scale_level": ["medium", "large"],
+            "is_purely_numeric": True,
+        },
     },
     "qr_algorithm": {
         "name": "QR 算法",
@@ -441,6 +534,11 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"A_k = Q_k R_k, \quad A_{k+1} = R_k Q_k",
         ],
+        "data_features_match": {
+            "is_sparse": False,
+            "scale_level": ["small", "medium"],
+            "is_purely_numeric": True,
+        },
     },
     "jacobi_eigenvalue": {
         "name": "Jacobi 特征值法",
@@ -457,6 +555,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"A_{k+1} = J^T A_k J, \quad J\text{为Givens旋转矩阵}",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium"],
+            "is_purely_numeric": True,
+        },
     },
 
     # ========================================================================
@@ -478,6 +580,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"y_{n+1} = y_n + h f(t_n, y_n)",
         ],
+        "data_features_match": {
+            "scale_level": ["small"],
+            "is_purely_numeric": True,
+        },
     },
     "improved_euler": {
         "name": "改进欧拉方法",
@@ -495,6 +601,10 @@ ALGORITHM_KB = {
             r"\tilde{y}_{n+1} = y_n + h f(t_n, y_n)",
             r"y_{n+1} = y_n + \frac{h}{2}[f(t_n,y_n) + f(t_{n+1},\tilde{y}_{n+1})]",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium"],
+            "is_purely_numeric": True,
+        },
     },
     "runge_kutta_4": {
         "name": "经典四阶龙格-库塔法",
@@ -515,6 +625,10 @@ ALGORITHM_KB = {
             r"k_2 = h f(t_n+\frac{h}{2}, y_n+\frac{k_1}{2})",
             r"y_{n+1} = y_n + \frac{1}{6}(k_1+2k_2+2k_3+k_4)",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium", "large"],
+            "is_purely_numeric": True,
+        },
     },
     "runge_kutta_fehlberg": {
         "name": "Runge-Kutta-Fehlberg (RKF45)",
@@ -531,6 +645,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"y_{n+1} = y_n + h\sum b_i k_i, \quad \text{误差} = h\sum (b_i - b_i^*)k_i",
         ],
+        "data_features_match": {
+            "scale_level": ["small", "medium", "large"],
+            "is_purely_numeric": True,
+        },
     },
     "linear_multistep": {
         "name": "线性多步法",
@@ -546,6 +664,10 @@ ALGORITHM_KB = {
         "related_formulas": [
             r"\sum_{j=0}^{k} \alpha_j y_{n+j} = h\sum_{j=0}^{k} \beta_j f_{n+j}",
         ],
+        "data_features_match": {
+            "scale_level": ["medium", "large"],
+            "is_purely_numeric": True,
+        },
     },
 }
 
