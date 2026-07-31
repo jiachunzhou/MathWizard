@@ -336,33 +336,258 @@ def render_submit_area(config: dict, description: str, latex: str, df):
 
         st.info(
             "💡 **下一步：**\n\n"
-            "1. 🌳 切换到「**算法决策**」标签页 → 查看 LLM 决策树推理过程\n"
-            "2. 📊 切换到「**分析结果**」标签页 → 查看生成的代码与验证结果"
+            "1. 🌳 切换到「**算法决策**」标签页 → 交互式查看推理路径并确认推荐\n"
+            "2. 📊 切换到「**分析结果**」标签页 → 查看 LLM 分析 + 数据特征 + 推荐算法 + 代码"
         )
 
 
 def render_result_tab():
-    """渲染分析结果标签页 — 代码生成 + 执行结果 + 验证"""
+    """渲染分析结果标签页 — LLM分析 + 数据特征 + 决策推理 + 代码 + 验证"""
     if not st.session_state.get("analysis_submitted"):
         st.info("👈 请先在「📝 问题输入」中填写问题描述并提交分析")
         return
 
     st.markdown("## 📊 分析结果")
 
+    results = st.session_state.get("analysis_result", {})
     submission = st.session_state.get("submission_data", {})
+    semantic = results.get("semantic_result", {})
+    data_report = results.get("data_report", {})
+    decision = results.get("decision_result", {})
 
-    # ---- 第一步：Python 代码 ----
+    # ========================================================================
+    # 第一部分：LLM 语义分析
+    # ========================================================================
+    st.markdown("### 🧠 第一步：LLM 语义分析")
+    _render_semantic_detail(semantic, submission)
+
+    st.divider()
+
+    # ========================================================================
+    # 第二部分：数据特征分析
+    # ========================================================================
+    st.markdown("### 📊 第二步：数据特征分析")
+    _render_data_feature_detail(data_report)
+
+    st.divider()
+
+    # ========================================================================
+    # 第三部分：决策树推理
+    # ========================================================================
+    st.markdown("### 🌳 第三步：决策树推理结果")
+    _render_decision_detail(decision)
+
+    st.divider()
+
+    # ========================================================================
+    # 第四部分：生成的代码
+    # ========================================================================
     _render_code_section(submission)
 
     st.divider()
 
-    # ---- 第二步：MATLAB 执行结果 ----
-    _render_matlab_result_section()
-
-    st.divider()
-
-    # ---- 第三步：结果验证 ----
+    # ========================================================================
+    # 第五部分：结果验证
+    # ========================================================================
     _render_validation_section(submission)
+
+
+# ============================================================================
+# 分析结果子组件
+# ============================================================================
+
+def _render_semantic_detail(semantic: dict, submission: dict):
+    """渲染 LLM 语义分析详细信息"""
+    method = semantic.get("analysis_method", "unknown")
+    method_label = {
+        "llm": "🤖 DeepSeek LLM 分析",
+        "keyword_rules": "📋 关键词规则引擎",
+        "fallback_keyword": "⚠️ 关键词规则（LLM 调用失败，已回退）",
+    }.get(method, method)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("分析方式", method_label)
+    with col2:
+        st.metric("问题类型", semantic.get("problem_type", "未知"))
+    with col3:
+        conf = semantic.get("confidence", 0)
+        st.metric("语义置信度", f"{conf:.0%}")
+
+    # 数学意图
+    intent = semantic.get("mathematical_intent", "")
+    if intent:
+        st.markdown(f"""
+        <div style="background:#f0f7ff;padding:0.8rem 1rem;border-radius:8px;
+                    border-left:3px solid #2e86c1;margin:0.8rem 0;">
+            <strong>🎯 数学意图：</strong>{intent}
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 关键实体
+    entities = semantic.get("key_entities", {})
+    if entities:
+        with st.expander("🔑 关键实体提取", expanded=True):
+            cols = st.columns(len(entities) if len(entities) <= 4 else 4)
+            for i, (entity_type, items) in enumerate(entities.items()):
+                if items:
+                    with cols[i % 4]:
+                        st.markdown(f"**{entity_type}**")
+                        for item in items:
+                            st.markdown(f"- `{item}`")
+
+    # 约束条件
+    constraints = semantic.get("constraints", [])
+    if constraints:
+        with st.expander("⛓️ 推导的约束条件", expanded=False):
+            for c in constraints:
+                st.markdown(f"- {c}")
+
+    # LLM 推理过程
+    reasoning = semantic.get("reasoning", "")
+    if reasoning:
+        with st.expander("📜 LLM 推理说明", expanded=False):
+            st.markdown(reasoning)
+
+    # LLM 原始响应
+    raw = semantic.get("llm_raw_response", "")
+    if raw:
+        with st.expander("📝 LLM 原始响应", expanded=False):
+            st.code(raw[:1000], language="json")
+
+    # LLM 错误
+    llm_error = semantic.get("llm_error", "")
+    if llm_error:
+        st.error(f"⚠️ LLM 调用失败：{llm_error}")
+
+    # 关键词命中
+    kw_algs = semantic.get("keyword_matched_algorithms", [])
+    if kw_algs:
+        with st.expander(f"🔍 关键词命中算法（{len(kw_algs)}个）", expanded=False):
+            from src.core.algorithm_kb import get_algorithm_info
+            for alg_id in kw_algs[:10]:
+                info = get_algorithm_info(alg_id)
+                st.markdown(
+                    f"- **{info.get('name', alg_id)}** "
+                    f"`{alg_id}` ({info.get('category', '—')})"
+                )
+
+
+def _render_data_feature_detail(data_report: dict):
+    """渲染数据特征分析详细信息"""
+    if not data_report or data_report.get("status") == "no_data":
+        st.info("📭 未上传数据，跳过数据特征分析")
+        return
+
+    # 摘要卡片
+    scale = data_report.get("scale", {})
+    sparsity = data_report.get("sparsity", {})
+    quality = data_report.get("quality", {})
+    structure = data_report.get("structure", {})
+    scale_sens = data_report.get("scale_sensitivity", {})
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("数据规模", f"{scale.get('rows', 0)}行 × {scale.get('cols', 0)}列",
+                  scale.get("level", ""))
+    with c2:
+        st.metric("稀疏度", f"{sparsity.get('sparse_ratio', 0):.1%}",
+                  "稀疏" if sparsity.get("is_sparse") else "稠密")
+    with c3:
+        st.metric("缺失率", f"{quality.get('missing_ratio', 0):.1%}",
+                  "需插值" if quality.get("needs_imputation") else "完整")
+    with c4:
+        st.metric("数值列占比", f"{structure.get('numeric_ratio', 0):.0%}",
+                  "全数值" if structure.get("is_purely_numeric") else "含非数值")
+
+    # 详细特征
+    with st.expander("📋 完整数据特征报告", expanded=False):
+        # 量纲
+        st.markdown(f"**量纲差异**：范围比 {scale_sens.get('range_ratio', 'N/A')}，"
+                    f"{'需要标准化' if scale_sens.get('needs_scaling') else '在可接受范围内'}")
+
+        # 分布
+        np = data_report.get("numeric_profile", {})
+        if np.get("available"):
+            skewed = "有" if np.get("has_skewed") else "无"
+            non_normal = "有非正态分布" if np.get("has_non_normal") else "正态分布"
+            st.markdown(f"**分布特征**：{skewed}偏态，{non_normal}")
+
+        # 预处理建议
+        recs = data_report.get("recommendations", [])
+        if recs:
+            st.markdown("**预处理建议**：")
+            for r in recs:
+                st.markdown(
+                    f"- **{r['action']}**：{r['reason']} "
+                    f"（方法：{', '.join(r.get('methods', []))}）"
+                )
+
+
+def _render_decision_detail(decision: dict):
+    """渲染决策树推理详细信息"""
+    if not decision:
+        st.info("无决策结果")
+        return
+
+    primary_info = decision.get("primary_algorithm_info", {})
+    candidates = decision.get("candidates", [])
+
+    # 推荐结果
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("🏆 首选算法", primary_info.get("name", decision.get("primary_algorithm", "未知")))
+    with c2:
+        st.metric("📂 问题分类", decision.get("problem_category", "未知"))
+    with c3:
+        st.metric("🎯 综合置信度", f"{decision.get('confidence', 0):.0%}")
+
+    # 首选算法详情
+    if primary_info:
+        st.markdown(f"""
+        <div style="background:#d4efdf;padding:1rem;border-radius:10px;
+                    border:1px solid #27ae60;margin:0.8rem 0;">
+            <strong>复杂度：</strong>{primary_info.get('complexity', '—')} &nbsp;|&nbsp;
+            <strong>稳定性：</strong>{primary_info.get('stability', '—')} &nbsp;|&nbsp;
+            <strong>MATLAB 函数：</strong><code>{primary_info.get('matlab_function', '—')}</code>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # 候选算法排行
+    if candidates:
+        with st.expander(f"📊 候选算法排行（共 {len(candidates)} 个）", expanded=True):
+            import pandas as pd
+            rows = []
+            for c in candidates:
+                rows.append({
+                    "排名": candidates.index(c) + 1,
+                    "算法": c.get("name", ""),
+                    "得分": round(c.get("score", 0), 1),
+                    "复杂度": c.get("complexity", ""),
+                    "稳定性": c.get("stability", ""),
+                    "MATLAB": c.get("matlab_function", ""),
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # 决策路径
+    path = decision.get("decision_path", [])
+    if path:
+        with st.expander("🌲 决策路径明细", expanded=False):
+            for step in path:
+                st.markdown(f"**{step['step']}** — {step.get('source', '')}")
+                st.markdown(f"> {step['decision']}")
+                detail = step.get("detail")
+                if detail and isinstance(detail, list):
+                    for d in detail[:5]:
+                        st.caption(f"  • {d}")
+                    if len(detail) > 5:
+                        st.caption(f"  ... 还有 {len(detail) - 5} 条")
+
+    # 推理说明
+    reasoning = decision.get("reasoning", "")
+    if reasoning:
+        with st.expander("📜 完整推理说明", expanded=False):
+            st.markdown(reasoning)
 
 
 def _render_code_section(submission: dict):
