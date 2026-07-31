@@ -3,8 +3,18 @@
 提供问题类型选择、LLM 设置、历史记录等功能
 """
 
-import streamlit as st
+import os
 
+import streamlit as st
+from dotenv import load_dotenv
+
+# 自动加载 .env
+_load_dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+load_dotenv(_load_dotenv_path)
+
+_LLM_DEFAULT_API_KEY = os.environ.get("LLM_API_KEY", "")
+_LLM_DEFAULT_API_BASE = os.environ.get("LLM_API_BASE", "https://api.openai.com/v1")
+_LLM_DEFAULT_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
 
 # 问题类型定义
 PROBLEM_TYPES = {
@@ -146,7 +156,8 @@ def _render_llm_settings() -> dict:
 
     model = st.selectbox(
         "模型选择",
-        options=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "claude-3.5-sonnet", "deepseek-chat"],
+        options=["deepseek-chat", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "claude-3.5-sonnet"],
+        index=0 if _LLM_DEFAULT_MODEL == "deepseek-chat" else 2,
         key="llm_model",
         help="选择用于决策树推理和代码生成的大语言模型",
     )
@@ -154,16 +165,18 @@ def _render_llm_settings() -> dict:
     api_key = st.text_input(
         "API Key",
         type="password",
+        value=_LLM_DEFAULT_API_KEY,
         key="llm_api_key",
-        placeholder="sk-...（可选，可在环境变量中设置）",
-        help="LLM 服务的 API Key。如已在环境变量 OPENAI_API_KEY 中设置则无需填写",
+        placeholder="sk-...（已从 .env 自动加载）",
+        help="LLM 服务的 API Key。已从 .env 文件自动读取，无需手动填写。",
     )
 
     api_base = st.text_input(
         "API Base URL（可选）",
+        value=_LLM_DEFAULT_API_BASE,
         key="llm_api_base",
         placeholder="https://api.openai.com/v1",
-        help="自定义 API 端点，留空使用默认",
+        help="自定义 API 端点。已从 .env 文件自动读取。",
     )
 
     return {

@@ -8,6 +8,8 @@ LLM 语义分析模块
 - key_entities: 关键实体（变量、函数、矩阵等）
 - constraints: 约束条件
 - suggested_category: 建议的算法大类
+
+配置优先级：函数参数 > .env 文件 > 环境变量 > 关键词回退
 """
 
 import json
@@ -15,7 +17,18 @@ import os
 import re
 from typing import Optional
 
+from dotenv import load_dotenv
+
 from src.core.algorithm_kb import ALGORITHM_KB, CATEGORIES, match_keywords, KEYWORD_TO_ALGORITHMS
+
+# 自动加载 .env 文件（项目根目录）
+_load_dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+load_dotenv(_load_dotenv_path)
+
+# 从 .env 读取默认配置
+_DEFAULT_API_KEY = os.environ.get("LLM_API_KEY", "")
+_DEFAULT_API_BASE = os.environ.get("LLM_API_BASE", "https://api.openai.com/v1")
+_DEFAULT_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
 
 
 # ============================================================================
@@ -92,12 +105,14 @@ def call_llm_for_semantic_analysis(
     has_data: bool = False,
     data_summary: str = "",
     latex_formula: str = "",
-    model: str = "gpt-4o-mini",
+    model: Optional[str] = None,
     api_key: Optional[str] = None,
     api_base: Optional[str] = None,
 ) -> dict:
     """
     调用 LLM 进行语义分析
+
+    配置优先级：函数参数 > .env 文件 > 环境变量 > 关键词回退
 
     Args:
         description: 用户问题描述
@@ -111,9 +126,10 @@ def call_llm_for_semantic_analysis(
     Returns:
         dict: 结构化分析结果
     """
-    # 优先用参数，其次环境变量
-    api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
-    api_base = api_base or os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
+    # 配置优先级：函数参数 > .env > 环境变量
+    api_key = api_key or _DEFAULT_API_KEY or os.environ.get("OPENAI_API_KEY", "")
+    api_base = api_base or _DEFAULT_API_BASE or os.environ.get("OPENAI_API_BASE", "https://api.openai.com/v1")
+    model = model or _DEFAULT_MODEL
 
     if not api_key:
         # 无 API Key 时回退到关键词规则引擎

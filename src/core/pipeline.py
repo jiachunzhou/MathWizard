@@ -22,21 +22,23 @@ def run_analysis_pipeline(
     df: Optional[pd.DataFrame] = None,
     latex_formula: str = "",
     problem_type_override: Optional[str] = None,
-    llm_model: str = "gpt-4o-mini",
+    llm_model: Optional[str] = None,
     llm_api_key: str = "",
     llm_api_base: str = "",
 ) -> dict:
     """
     执行完整的分析流水线
 
+    配置优先级：函数参数 > .env 文件 > 关键词回退
+
     Args:
         description: 用户问题描述
         df: 上传的数据 DataFrame
         latex_formula: 用户输入的 LaTeX 公式
         problem_type_override: 用户手动选择的问题类型（覆盖自动分类）
-        llm_model: LLM 模型
-        llm_api_key: API Key
-        llm_api_base: API Base
+        llm_model: LLM 模型（可选，默认从 .env 读取）
+        llm_api_key: API Key（可选，默认从 .env 读取）
+        llm_api_base: API Base（可选，默认从 .env 读取）
 
     Returns:
         dict: 完整分析结果，写入 session_state
