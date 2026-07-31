@@ -17,11 +17,18 @@ import os
 import re
 from typing import Optional
 
-# 尝试加载 .env（python-dotenv 未安装时跳过）
+# 尝试加载 .env（多路径尝试，兼容开发环境和打包环境）
 try:
     from dotenv import load_dotenv
-    _load_dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
-    load_dotenv(_load_dotenv_path)
+    _candidates = [
+        os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
+        os.path.join(os.getcwd(), ".env"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".env"),
+    ]
+    for _p in _candidates:
+        if os.path.isfile(_p):
+            load_dotenv(_p)
+            break
 except ImportError:
     pass
 

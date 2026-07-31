@@ -203,6 +203,9 @@ def render_main_header():
 
 def render_input_tab(config: dict):
     """渲染问题输入标签页"""
+    # ---- 演示按钮 ----
+    _render_demo_shortcuts()
+
     # ---- 问题描述 ----
     st.markdown("### 📝 问题描述")
 
@@ -235,8 +238,19 @@ def render_input_tab(config: dict):
 
     st.divider()
 
-    # ---- 文件上传 ----
-    uploaded_df = render_file_upload()
+    # ---- 文件上传（或展示演示数据） ----
+    demo_data = st.session_state.get("uploaded_data")
+    demo_file = st.session_state.get("file_name", "")
+    is_demo = bool(demo_file and st.session_state.get("_demo_data_ok"))
+
+    if is_demo and demo_data is not None:
+        st.markdown("### 📂 数据文件（演示模式）")
+        st.success(f"✅ 已加载演示数据: **{demo_file}** ({demo_data.shape[0]}行 × {demo_data.shape[1]}列)")
+        with st.expander("🔍 数据预览", expanded=True):
+            st.dataframe(demo_data.head(10), use_container_width=True)
+        uploaded_df = demo_data
+    else:
+        uploaded_df = render_file_upload()
 
     st.divider()
 
@@ -574,6 +588,130 @@ def _get_placeholder_matlab_code(submission: dict) -> str:
 % qqplot(residuals);
 % title('残差正态性检验');
 """
+
+
+# ============================================================================
+# 演示场景快捷入口
+# ============================================================================
+
+import os as _os
+
+DEMO_SCENARIOS = [
+    {
+        "icon": "📈",
+        "name": "曲线拟合 — 多项式回归",
+        "description": (
+            "对附件中的数据 (demo_poly_fit.csv) 进行多项式回归拟合。"
+            "数据包含自变量 x 和因变量 y，y 含测量噪声。"
+            "请找出 x 和 y 之间的函数关系 y = f(x)，"
+            "使用最小二乘法确定多项式系数。"
+        ),
+        "data_file": "demo_poly_fit.csv",
+        "data_dir": "data/samples",
+    },
+    {
+        "icon": "📐",
+        "name": "插值与逼近 — 三次样条插值",
+        "description": (
+            "已知 12 个离散数据点 (demo_interpolation.csv)，"
+            "需要构造一条光滑曲线通过所有这些点。"
+            "数据点分布不均匀，要求插值曲线具有 C² 连续性。"
+            "请推荐最适合的插值算法。"
+        ),
+        "data_file": "demo_interpolation.csv",
+        "data_dir": "data/samples",
+    },
+    {
+        "icon": "🔲",
+        "name": "线性方程组 — 三对角稀疏矩阵",
+        "description": (
+            "求解线性方程组 Ax = b，其中 A 是一个 100×100 的三对角稀疏矩阵"
+            "（主对角线元素为 2，次对角线元素为 -1），"
+            "b 为全 1 向量。矩阵规模中等，具有稀疏结构。"
+            "请推荐最合适的求解算法。"
+        ),
+        "data_file": "demo_linear_system.csv",
+        "data_dir": "data/samples",
+    },
+    {
+        "icon": "🎯",
+        "name": "非线性方程 — 牛顿法求根",
+        "description": (
+            "求解非线性方程 f(x) = x³ - 2x - 5 = 0 在区间 [1, 4] 内的根。"
+            "已知 f(2) = -1 < 0, f(3) = 16 > 0，"
+            "函数在区间内连续且单调递增。需要高精度结果。"
+        ),
+        "data_file": "demo_nonlinear_root.csv",
+        "data_dir": "data/samples",
+    },
+    {
+        "icon": "🔢",
+        "name": "常微分方程 — RK4 初值问题",
+        "description": (
+            "求解一阶常微分方程初值问题：dy/dt = -2y + sin(t), y(0) = 1。"
+            "要求在 t ∈ [0, 3] 上以步长 h = 0.1 进行数值求解，"
+            "需要高精度和误差控制。"
+        ),
+        "data_file": "demo_ode.csv",
+        "data_dir": "data/samples",
+    },
+]
+
+
+def _render_demo_shortcuts():
+    """渲染演示场景快捷按钮 — 一键填充示例问题和数据"""
+    st.markdown("### 🧪 快速演示")
+
+    # 使用多列展示按钮
+    cols = st.columns(len(DEMO_SCENARIOS))
+
+    for i, (col, scene) in enumerate(zip(cols, DEMO_SCENARIOS)):
+        with col:
+            if st.button(
+                f"{scene['icon']} {scene['name']}",
+                key=f"demo_{i}",
+                use_container_width=True,
+                help=f"点击自动填充：{scene['name']}",
+            ):
+                # 填充问题描述
+                st.session_state["problem_description"] = scene["description"]
+
+                # 尝试多个路径加载数据文件
+                import pandas as pd
+                search_paths = [
+                    _os.path.join(scene["data_dir"], scene["data_file"]),
+                    _os.path.join("data", scene["data_file"]),
+                    _os.path.join("data", "samples", scene["data_file"]),
+                ]
+                df = None
+                for data_path in search_paths:
+                    if _os.path.isfile(data_path):
+                        df = pd.read_csv(data_path)
+                        break
+                if df is not None:
+                    st.session_state["uploaded_data"] = df
+                    st.session_state["file_name"] = scene["data_file"]
+                    st.session_state["_demo_data_ok"] = True
+                else:
+                    st.session_state["_demo_data_ok"] = False
+                    st.session_state["_demo_data_error"] = (
+                        f"⚠️ 未找到 {scene['data_file']}，"
+                        "请执行 git pull 获取最新数据文件。"
+                    )
+
+                st.rerun()
+
+    # 如果有选中的演示场景，展示加载状态
+    demo_name = st.session_state.get("file_name", "")
+    if demo_name and st.session_state.get("_demo_data_ok"):
+        st.success(f"✅ 已加载演示：{demo_name}")
+        if st.button("❌ 清除演示数据", key="clear_demo"):
+            for k in ["problem_description", "uploaded_data", "file_name",
+                       "_demo_data_ok", "_demo_data_error"]:
+                st.session_state.pop(k, None)
+            st.rerun()
+    elif st.session_state.get("_demo_data_error"):
+        st.warning(st.session_state["_demo_data_error"])
 
 
 # ============================================================================

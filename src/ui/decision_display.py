@@ -108,6 +108,21 @@ def _render_overview_cards_live(submission: dict, semantic: dict, decision: dict
     }
     st.caption(f"分析方式：{method_labels.get(method, method)}")
 
+    # LLM 错误详情
+    llm_error = semantic.get("llm_error", "")
+    if llm_error:
+        with st.expander("⚠️ LLM 调用失败详情", expanded=False):
+            st.error(f"错误信息：{llm_error}")
+            st.markdown("""
+            **常见原因：**
+            - API Key 未配置或无效 → 检查侧边栏「🤖 LLM 设置」中的 API Key
+            - 网络不通 → 确认能访问 `api.deepseek.com`
+            - 模型名错误 → 当前使用 `deepseek-chat`
+            - 未安装 `python-dotenv` → `pip install python-dotenv`，然后确保项目根目录有 `.env` 文件
+            
+            **手动解决：** 在侧边栏 LLM 设置中直接粘贴 API Key 即可绕过 `.env` 文件。
+            """)
+
 
 # ============================================================================
 # 自然语言分析（真实数据版）

@@ -7,13 +7,19 @@ import os
 
 import streamlit as st
 
-# 尝试加载 .env（python-dotenv 未安装时跳过）
+# 尝试加载 .env（多路径尝试）
 try:
     from dotenv import load_dotenv
-    _load_dotenv_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
-    load_dotenv(_load_dotenv_path)
+    _candidates = [
+        os.path.join(os.path.dirname(__file__), "..", "..", ".env"),
+        os.path.join(os.getcwd(), ".env"),
+    ]
+    for _p in _candidates:
+        if os.path.isfile(_p):
+            load_dotenv(_p)
+            break
 except ImportError:
-    pass  # python-dotenv 未安装，使用环境变量
+    pass
 
 _LLM_DEFAULT_API_KEY = os.environ.get("LLM_API_KEY", "")
 _LLM_DEFAULT_API_BASE = os.environ.get("LLM_API_BASE", "https://api.openai.com/v1")
