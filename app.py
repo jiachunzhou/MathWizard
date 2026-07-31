@@ -15,6 +15,7 @@ import streamlit as st
 from src.ui.formula_input import render_formula_input, render_formula_templates, insert_template_to_input
 from src.ui.file_upload import render_file_upload
 from src.ui.sidebar import render_sidebar, PROBLEM_TYPES
+from src.ui.decision_display import render_decision_tab
 
 
 # ============================================================================
@@ -162,11 +163,18 @@ def main():
     # ---- 主内容区 ----
     render_main_header()
 
-    # 标签页：输入界面 | 分析结果（后续）
-    tab_input, tab_result = st.tabs(["📝 问题输入", "📊 分析结果"])
+    # 标签页：输入界面 | 算法决策 | 分析结果
+    tab_input, tab_decision, tab_result = st.tabs([
+        "📝 问题输入",
+        "🌳 算法决策",
+        "📊 分析结果",
+    ])
 
     with tab_input:
         render_input_tab(config)
+
+    with tab_decision:
+        render_decision_tab()
 
     with tab_result:
         render_result_tab()
@@ -289,43 +297,260 @@ def render_submit_area(config: dict, description: str, latex: str, df):
             st.json(st.session_state["submission_data"])
 
         st.info(
-            "💡 **下一阶段将实现：**\n"
-            "1. LLM 决策树分析 → 选择最优算法\n"
-            "2. 自动生成 Python 代码\n"
-            "3. 调用 MATLAB Engine 执行计算\n"
-            "4. 结果验证与可视化展示\n\n"
-            "请切换到「📊 分析结果」标签页查看（开发中）"
+            "💡 **分析流程：**\n\n"
+            "1. 🌳 切换到「**算法决策**」标签页 → 查看 LLM 决策树推理过程\n"
+            "2. 📊 切换到「**分析结果**」标签页 → 查看生成的代码与验证结果\n\n"
+            "（当前为界面展示阶段，LLM 推理和代码生成将在后续版本实现）"
         )
 
 
 def render_result_tab():
-    """渲染分析结果标签页"""
+    """渲染分析结果标签页 — 代码生成 + 执行结果 + 验证"""
     if not st.session_state.get("analysis_submitted"):
-        st.info("👈 请先在「问题输入」标签页中填写信息并提交分析")
+        st.info("👈 请先在「📝 问题输入」中填写问题描述并提交分析")
         return
 
-    st.markdown("### 📊 分析结果")
+    st.markdown("## 📊 分析结果")
 
     submission = st.session_state.get("submission_data", {})
 
-    # 展示当前阶段占位
-    st.markdown("---")
+    # ---- 第一步：Python 代码 ----
+    _render_code_section(submission)
 
-    # 决策树阶段占位
-    with st.expander("🌳 第一步：算法决策树分析", expanded=True):
-        st.info("🔜 **开发中** — LLM 将在此处展示决策树推理过程，选择最优算法")
+    st.divider()
 
-    # 代码生成阶段占位
-    with st.expander("💻 第二步：Python 代码生成", expanded=True):
-        st.info("🔜 **开发中** — 将在此处展示生成的 Python/MATLAB 代码")
+    # ---- 第二步：MATLAB 执行结果 ----
+    _render_matlab_result_section()
 
-    # MATLAB 执行结果阶段占位
-    with st.expander("⚡ 第三步：MATLAB 计算结果", expanded=True):
-        st.info("🔜 **开发中** — 将在此处展示 MATLAB Engine 执行结果")
+    st.divider()
 
-    # 验证阶段占位
-    with st.expander("✅ 第四步：结果验证", expanded=True):
-        st.info("🔜 **开发中** — 将在此处展示自动验证结果")
+    # ---- 第三步：结果验证 ----
+    _render_validation_section(submission)
+
+
+def _render_code_section(submission: dict):
+    """渲染 Python/MATLAB 代码展示区"""
+    st.markdown("### 💻 生成的代码")
+
+    tab_py, tab_matlab = st.tabs(["🐍 Python 代码", "🔧 MATLAB 代码"])
+
+    with tab_py:
+        st.caption("LLM 自动生成的 Python 调用代码")
+        st.code(
+            _get_placeholder_python_code(submission),
+            language="python",
+            line_numbers=True,
+        )
+
+    with tab_matlab:
+        st.caption("等效的 MATLAB 原生代码")
+        st.code(
+            _get_placeholder_matlab_code(submission),
+            language="matlab",
+            line_numbers=True,
+        )
+
+    # 代码说明
+    with st.expander("📋 代码说明", expanded=False):
+        st.markdown("""
+        | 模块 | 说明 |
+        |------|------|
+        | 数据预处理 | 标准化、缺失值处理、特征选择 |
+        | 模型构建 | 根据决策树选择的算法构建模型 |
+        | MATLAB 调用 | 通过 `matlab.engine` 桥接 MATLAB 引擎 |
+        | 结果回传 | 将 MATLAB 计算结果转换回 Python 数据结构 |
+        """)
+
+
+def _render_matlab_result_section():
+    """渲染 MATLAB 执行结果"""
+    st.markdown("### ⚡ MATLAB 执行结果")
+
+    col_out, col_viz = st.columns(2)
+
+    with col_out:
+        st.markdown("**数值输出**")
+        st.info(
+            "🔜 此处将展示 MATLAB Engine 的原始输出，包括：\n\n"
+            "- 回归系数 / 特征值 / 优化结果\n"
+            "- 收敛信息与迭代次数\n"
+            "- 执行时间统计"
+        )
+
+    with col_viz:
+        st.markdown("**可视化结果**")
+        st.info(
+            "🔜 此处将展示 MATLAB 生成的图表：\n\n"
+            "- 拟合曲线 vs 原始数据\n"
+            "- 残差分布图\n"
+            "- 特征重要性排序"
+        )
+
+
+def _render_validation_section(submission: dict):
+    """渲染结果验证区"""
+    st.markdown("### ✅ 结果验证")
+
+    # 验证维度
+    checks = [
+        ("残差正态性检验", "Shapiro-Wilk / Kolmogorov-Smirnov", "验证模型假设"),
+        ("多重共线性检验", "VIF（方差膨胀因子）", "检测特征冗余"),
+        ("交叉验证", "K-Fold Cross Validation", "评估泛化能力"),
+        ("残差异方差检验", "Breusch-Pagan / White", "验证方差齐性"),
+        ("影响点诊断", "Cook's Distance", "检测异常影响点"),
+        ("预测误差评估", "MAE / RMSE / MAPE", "量化预测精度"),
+    ]
+
+    for i, (name, method, purpose) in enumerate(checks):
+        status_color = "#ccc"
+        status_text = "⏳ 待验证"
+
+        st.markdown(f"""
+        <div style="display:flex;align-items:center;margin:6px 0;padding:10px 14px;
+                    background:#fafafa;border-radius:8px;border:1px solid #eee;">
+            <span style="font-size:1.2rem;margin-right:12px;">{status_text}</span>
+            <div>
+                <strong>{name}</strong>
+                <span style="color:#888;margin-left:8px;font-size:0.85rem;">
+                    方法：{method}
+                </span>
+            </div>
+            <span style="margin-left:auto;color:#aaa;font-size:0.8rem;">{purpose}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.caption("🔜 提交分析后，验证模块将自动执行以上所有检验并输出结论")
+
+
+def _get_placeholder_python_code(submission: dict) -> str:
+    """生成占位 Python 代码（后续由 LLM 生成）"""
+    problem_type = submission.get("problem_type", "待分析")
+    has_data = submission.get("data_shape") is not None
+
+    lines = [
+        '"""',
+        f'MathWizard 自动生成代码',
+        f'问题类型: {problem_type}',
+        f'数据来源: {"上传文件" if has_data else "示例数据"}',
+        f'生成时间: 提交分析后自动生成',
+        '"""',
+        '',
+        'import numpy as np',
+        'import pandas as pd',
+        'from scipy import stats, optimize, linalg',
+        '',
+        '',
+        '# ============================================================',
+        '# 1. 数据加载与预处理',
+        '# ============================================================',
+        '',
+    ]
+
+    if has_data:
+        shape = submission.get("data_shape", (0, 0))
+        cols = submission.get("data_columns", [])
+        lines.extend([
+            f'# 加载上传数据: {shape[0]} 行 × {shape[1]} 列',
+            f'# 列名: {", ".join(cols[:5])}{"..." if len(cols) > 5 else ""}',
+            '# df = pd.read_csv("uploaded_file.csv")',
+            '',
+            '# 数据预处理',
+            '# - 缺失值检测与处理',
+            '# - 标准化 / 归一化',
+            '# - 特征选择 / 降维',
+            '',
+        ])
+    else:
+        lines.extend([
+            '# 无上传数据，使用示例数据',
+            '# np.random.seed(42)',
+            '# X = np.random.randn(100, 5)',
+            '# y = 3*X[:,0] + 2*X[:,1] + np.random.randn(100)*0.5',
+            '',
+        ])
+
+    lines.extend([
+        '',
+        '# ============================================================',
+        '# 2. 算法实现（由 LLM 决策树选择）',
+        '# ============================================================',
+        '',
+        '# 算法选择理由将在此处注释',
+        '# 决策树路径: 语义分析 → 数据特征 → 问题分类 → 算法匹配',
+        '',
+        '',
+        '# ============================================================',
+        '# 3. 调用 MATLAB Engine',
+        '# ============================================================',
+        '',
+        '# import matlab.engine',
+        '# eng = matlab.engine.start_matlab()',
+        '#',
+        '# # 将数据传入 MATLAB 工作区',
+        '# eng.workspace["X"] = matlab.double(X.tolist())',
+        '# eng.workspace["y"] = matlab.double(y.tolist())',
+        '#',
+        '# # 调用 MATLAB 函数',
+        '# result = eng.some_matlab_function(nargout=1)',
+        '#',
+        '# eng.quit()',
+        '',
+        '',
+        '# ============================================================',
+        '# 4. 结果处理与可视化',
+        '# ============================================================',
+        '',
+        '# import matplotlib.pyplot as plt',
+        '#',
+        '# # 绘制结果',
+        '# fig, axes = plt.subplots(1, 2, figsize=(12, 5))',
+        '# ...',
+        '# plt.show()',
+    ])
+
+    return '\n'.join(lines)
+
+
+def _get_placeholder_matlab_code(submission: dict) -> str:
+    """生成占位 MATLAB 代码"""
+    problem_type = submission.get("problem_type", "待分析")
+
+    return f"""% MathWizard 自动生成 MATLAB 代码
+% 问题类型: {problem_type}
+% 生成时间: 提交分析后自动生成
+
+% ============================================================
+% 1. 数据加载
+% ============================================================
+% data = readtable('data.csv');
+% X = data{{:, 1:end-1}};
+% y = data{{:, end}};
+
+% ============================================================
+% 2. 核心算法
+% ============================================================
+% 算法由 LLM 决策树自动选择
+% 示例（线性回归）:
+%   model = fitlm(X, y);
+%   disp(model);
+
+% ============================================================
+% 3. 结果可视化
+% ============================================================
+% figure;
+% plot(y, 'b-o'); hold on;
+% plot(predict(model, X), 'r--');
+% legend('实际值', '预测值');
+% title('模型拟合结果');
+
+% ============================================================
+% 4. 残差分析
+% ============================================================
+% residuals = model.Residuals.Raw;
+% figure;
+% qqplot(residuals);
+% title('残差正态性检验');
+"""
 
 
 # ============================================================================
