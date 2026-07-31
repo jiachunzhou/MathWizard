@@ -23,22 +23,27 @@ def render_formula_input() -> str:
     渲染公式输入区域，返回用户输入的 LaTeX 源码
 
     Returns:
-        str: 用户输入的 LaTeX 公式字符串
+        str: 用户输入的 LaTeX 公式字符串（可为空，LLM 将自动推断）
     """
-    st.markdown("### 📐 数学公式输入")
+    st.markdown("### 📐 数学公式（可选）")
 
     # 使用两列布局：左边输入，右边预览
     col_input, col_preview = st.columns([1, 1])
 
     with col_input:
         # LaTeX 源码输入区
+        st.caption("可留空 — 系统将从问题描述和数据中自动推断公式")
         latex_input = st.text_area(
             label="LaTeX 公式源码",
             value=st.session_state.get("latex_input", ""),
             height=200,
-            placeholder=r"在此输入 LaTeX 公式，例如：\int_{0}^{\infty} e^{-x^2} dx = \frac{\sqrt{\pi}}{2}",
+            placeholder=(
+                "可选。输入公式可提高代码生成精度。\n"
+                "留空时 LLM 将根据问题描述和数据自动推断数学表达式。\n\n"
+                "示例：y = \\beta_0 + \\beta_1 x_1 + \\beta_2 x_2 + \\varepsilon"
+            ),
             key="latex_text_area",
-            help="支持标准 LaTeX 数学语法。可使用 $$...$$ 或 $...$ 包裹公式。",
+            help="支持标准 LaTeX 数学语法。留空将由 LLM 自动推断。",
         )
 
         # 保存到 session state
@@ -69,15 +74,19 @@ def render_formula_templates() -> Optional[str]:
         str | None: 被选中的模板源码
     """
     st.markdown("**公式模板库**")
+    st.caption("提交后 LLM 将自动推荐匹配的公式")
 
     categories = get_all_categories()
+    # 「自动推荐」作为默认选项
+    category_options = ["🤖 自动推荐（提交后匹配）"] + categories
+
     selected_category = st.selectbox(
         "选择分类",
-        categories,
+        category_options,
         key="template_category",
     )
 
-    if selected_category:
+    if selected_category and not selected_category.startswith("🤖"):
         templates = get_templates_by_category(selected_category)
         template_names = list(templates.keys())
 

@@ -101,27 +101,43 @@ def render_sidebar() -> dict:
 
 
 def _render_problem_type() -> str:
-    """渲染问题类型选择器"""
+    """渲染问题类型选择器 — 默认自动判断，用户可手动覆盖"""
     st.markdown("### 🎯 问题类型")
 
+    # 构建选项列表：「自动判断」排在第一位
     problem_types = list(PROBLEM_TYPES.keys())
+    options = ["🤖 自动判断（推荐）"] + problem_types
 
     selected = st.selectbox(
-        "选择您的数学问题类型",
-        options=problem_types,
-        format_func=lambda x: f"{PROBLEM_TYPES[x]['icon']} {x}",
+        "问题类型（可留空，由LLM自动分类）",
+        options=options,
+        format_func=lambda x: (
+            x if x.startswith("🤖") else f"{PROBLEM_TYPES[x]['icon']} {x}"
+        ),
         key="problem_type_select",
     )
 
-    if selected:
+    # 用户手动选择了具体类型
+    if selected in PROBLEM_TYPES:
         info = PROBLEM_TYPES[selected]
-        st.caption(info['description'])
+        st.caption(f"📌 已手动指定：{info['description']}")
 
-        with st.expander("适用算法", expanded=False):
+        with st.expander("📋 该类型候选算法", expanded=False):
+            st.caption("提交后 LLM 决策树将从以下算法中择优：")
             for algo in info['algorithms']:
                 st.markdown(f"- {algo}")
+        return selected
 
-    return selected
+    # 选择了「自动判断」
+    st.caption("🧠 系统将通过决策树自动分析问题描述并分类")
+    st.caption("覆盖范围：全部 8 个领域、50+ 种算法")
+
+    with st.expander("📋 系统可识别的全部算法", expanded=False):
+        for ptype, info in PROBLEM_TYPES.items():
+            st.markdown(f"**{info['icon']} {ptype}** — {info['description']}")
+            st.caption("  " + " · ".join(info['algorithms']))
+
+    return None  # None 表示「待 LLM 自动判断」
 
 
 def _render_llm_settings() -> dict:
@@ -180,16 +196,20 @@ def _render_help():
     with st.expander("如何使用", expanded=False):
         st.markdown("""
         **步骤：**
-        1. 在左侧选择问题类型
-        2. 在主区域用自然语言描述您的问题
-        3. 输入相关的数学公式（LaTeX 格式）
-        4. 上传待分析的数据文件（可选）
-        5. 点击「提交分析」按钮
+        1. 在主区域用自然语言描述您的问题
+        2. 上传待分析的数据文件（可选）
+        3. （可选）手动输入公式或选择问题类型来引导 LLM
+        4. 点击「提交分析」按钮
         
-        **LaTeX 公式示例：**
-        - 积分：`\\int_{0}^{\\infty} e^{-x} dx`
-        - 矩阵：`\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}`
-        - 导数：`\\frac{d}{dx}f(x)`
+        **系统将自动完成：**
+        - 🌳 决策树分析 → 问题类型分类
+        - 🔍 算法推荐 → 匹配最优算法
+        - 📐 公式推荐 → 匹配数学表达式
+        - 💻 代码生成 → Python + MATLAB 脚本
+        
+        **手动引导（可选）：**
+        - 左侧选择问题类型 → 缩小算法搜索范围
+        - 输入 LaTeX 公式 → 提高代码生成精度
         """)
 
     with st.expander("快捷键", expanded=False):

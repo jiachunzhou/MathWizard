@@ -235,24 +235,26 @@ def render_submit_area(config: dict, description: str, latex: str, df):
     """渲染提交按钮和状态检查"""
     st.markdown("### 🚀 提交分析")
 
-    # 状态检查
+    # 状态检查（问题类型由 LLM 自动判断，不需要用户填写）
     checks = []
     checks.append(("问题描述", bool(description.strip())))
-    checks.append(("数学公式", bool(latex.strip())))
     checks.append(("数据文件", df is not None))
-    checks.append(("问题类型", bool(config.get('problem_type'))))
+    checks.append(("问题类型", True))  # 始终通过 — LLM 自动分类
 
     # 显示状态
     cols = st.columns(len(checks))
     for i, (name, ok) in enumerate(checks):
         with cols[i]:
             if ok:
-                st.success(f"✅ {name}")
+                if name == "问题类型":
+                    st.success(f"🤖 {name}（自动判断）")
+                else:
+                    st.success(f"✅ {name}")
             else:
                 st.info(f"⏳ {name}")
 
-    # 准备就绪判断（至少需要问题描述或公式之一）
-    ready = checks[0][1] or checks[1][1]
+    # 准备就绪判断（只需要问题描述）
+    ready = checks[0][1]
 
     # 提交按钮
     col_btn, col_hint = st.columns([1, 3])
@@ -266,16 +268,16 @@ def render_submit_area(config: dict, description: str, latex: str, df):
 
     with col_hint:
         if not ready:
-            st.caption("⚠️ 请至少填写问题描述或输入数学公式后再提交")
+            st.caption("⚠️ 请至少填写问题描述后再提交")
         else:
-            st.caption("✅ 准备就绪，点击按钮开始智能分析")
+            st.caption("✅ 准备就绪 — 系统将自动：分类 → 选算法 → 推荐公式 → 生成代码")
 
     if submitted:
         st.session_state["analysis_submitted"] = True
         st.session_state["submission_data"] = {
-            "problem_type": config.get('problem_type'),
+            "problem_type": config.get('problem_type') or "🤖 待 LLM 自动分类",
             "description": description,
-            "latex_formula": latex,
+            "latex_formula": latex if latex.strip() else "🤖 待 LLM 自动推断",
             "data_shape": df.shape if df is not None else None,
             "data_columns": df.columns.tolist() if df is not None else None,
             "llm_model": config.get('llm_model'),
